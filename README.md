@@ -21,7 +21,9 @@ The plugin runs with your user permissions inside the long-running shell. Review
 
 ## Screenshots
 
-No screenshot is included yet. A preview should be added only after capturing the real plugin running in Omarchy; this repository does not use mockups as screenshots.
+<img width="622" height="820" alt="image" src="https://github.com/user-attachments/assets/4417b5a5-0650-4c13-af06-12b26f5a0ce9" />
+
+<img width="618" height="822" alt="image" src="https://github.com/user-attachments/assets/7df54cdb-8a5e-4803-a9b7-7a40876f5274" />
 
 ## Dependencies
 
