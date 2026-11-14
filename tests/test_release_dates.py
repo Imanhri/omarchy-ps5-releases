@@ -344,7 +344,8 @@ class ReleaseDateTests(unittest.TestCase):
             ])
 
     def test_qml_rows_use_async_cover_images_plain_titles_and_placeholders(self):
-        panel = Path(__file__).parents[1].joinpath("Panel.qml").read_text(encoding="utf-8")
+        project = Path(__file__).parents[1]
+        panel = project.joinpath("Panel.qml").read_text(encoding="utf-8")
         self.assertEqual(panel.count("sourceSize: Qt.size(90, 128)"), 2)
         self.assertGreaterEqual(panel.count("asynchronous: true"), 4)
         self.assertEqual(panel.count("elide: Text.ElideRight"), 2)
@@ -352,6 +353,8 @@ class ReleaseDateTests(unittest.TestCase):
         self.assertIn("upcomingCover.status !== Image.Ready", panel)
         self.assertIn("monthlyCover.status !== Image.Ready", panel)
         self.assertIn("cover_url: root.safeCoverUrl(game.cover_url)", panel)
+        self.assertEqual(panel.count('Qt.resolvedUrl("ps5-logo.svg")'), 2)
+        self.assertTrue(project.joinpath("ps5-logo.svg").is_file())
 
     def test_europe_release_suppresses_later_other_region_record(self):
         rows = [

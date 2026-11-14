@@ -586,7 +586,7 @@ Panel {
                       anchors.centerIn: parent
                       width: Style.space(24)
                       height: Style.space(24)
-                      source: Qt.resolvedUrl("device-gamepad-2.svg")
+                      source: Qt.resolvedUrl("ps5-logo.svg")
                       sourceSize: Qt.size(48, 48)
                       fillMode: Image.PreserveAspectFit
                       asynchronous: true
@@ -873,7 +873,7 @@ Panel {
                       anchors.centerIn: parent
                       width: Style.space(24)
                       height: Style.space(24)
-                      source: Qt.resolvedUrl("device-gamepad-2.svg")
+                      source: Qt.resolvedUrl("ps5-logo.svg")
                       sourceSize: Qt.size(48, 48)
                       fillMode: Image.PreserveAspectFit
                       asynchronous: true

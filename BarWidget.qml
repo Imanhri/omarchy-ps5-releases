@@ -85,7 +85,7 @@ BarWidget {
     bar: root.bar
     iconComponent: Component {
       Image {
-        source: Qt.resolvedUrl("device-gamepad-2.svg")
+        source: Qt.resolvedUrl("ps5-logo.svg")
         sourceSize: Qt.size(48, 48)
         width: 32
         height: 32

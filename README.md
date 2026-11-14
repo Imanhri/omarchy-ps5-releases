@@ -8,7 +8,7 @@ A Quickshell bar widget for Omarchy that shows upcoming PlayStation 5 releases a
 - A monthly ranking by IGDB total rating, requiring at least five ratings.
 - Previous and next month navigation and manual refresh in both tabs.
 - Strict PS5 platform verification, exact release-date precision, regional date handling, and filtering of add-ons and duplicate editions.
-- Cover art from IGDB with a bounded local cache and a gamepad placeholder when art is unavailable.
+- Cover art from IGDB with a bounded local cache and the plugin icon as a placeholder when art is unavailable.
 - Clickable game rows that open the exact IGDB game page in the default browser when IGDB supplies a valid URL.
 - Six-hour, file-locked data caching. Refreshing the display normally reuses cached data instead of creating a new Twitch token.
 - Asynchronous Python requests so the shell UI remains responsive.
@@ -78,7 +78,7 @@ The file is ignored by Git. Only `games.py` reads it; credentials and access tok
 
 ## Use the tabs
 
-Click the gamepad icon in the top bar to open the panel.
+Click the PlayStation mark in the top bar to open the panel.
 
 - **Upcoming PS5 Releases** shows eligible games with an exact PS5 release date, days remaining, and a cover when available. The list is sorted by release date.
 - **Top Games of the Month** shows eligible PS5 releases in the selected calendar month, ranked by IGDB total rating. Games with fewer than five ratings are not included in the ranking. Use the arrows to change months.
@@ -87,7 +87,7 @@ Click the gamepad icon in the top bar to open the panel.
 
 ## Cover art and cache
 
-Cover metadata comes from IGDB. Images are requested from IGDB's image CDN and cached locally under `~/.cache/ps5-releases/covers/`; the cache is bounded by image count and total size. A missing or failed image uses the bundled gamepad placeholder. Game data is cached for six hours under `$XDG_CACHE_HOME/ps5-releases/`, or `~/.cache/ps5-releases/` when `XDG_CACHE_HOME` is not set. No cover images are bundled in this repository.
+Cover metadata comes from IGDB. Images are requested from IGDB's image CDN and cached locally under `~/.cache/ps5-releases/covers/`; the cache is bounded by image count and total size. A missing or failed image uses the bundled plugin icon as a placeholder. Game data is cached for six hours under `$XDG_CACHE_HOME/ps5-releases/`, or `~/.cache/ps5-releases/` when `XDG_CACHE_HOME` is not set. No cover images are bundled in this repository.
 
 ## Update
 
@@ -115,3 +115,14 @@ Removing the plugin leaves your IGDB credentials and cached files in place in ca
 - **Covers are blank:** IGDB may not have cover metadata, or the image request may have failed. The row remains usable and shows the placeholder.
 - **A game page does not open:** make sure `xdg-open` is available and a default browser is configured. Only safe HTTPS IGDB game-detail URLs are opened.
 - **The widget is not visible:** check `omarchy plugin list` and confirm the widget is enabled in your bar layout. Revalidate the plugin and inspect Quickshell's logs for QML errors.
+<<<<<<< HEAD
+=======
+
+## Data and asset attribution
+
+Game names, ratings, release data, game URLs, and cover metadata are retrieved from [IGDB](https://www.igdb.com/) through its API. Cover images are served by the IGDB image CDN. See the [IGDB API documentation](https://api-docs.igdb.com/) and applicable Twitch Developer Service Agreement for usage terms. Game art and trademarks remain the property of their respective owners. This independent plugin is not affiliated with Sony, PlayStation, Twitch, or IGDB.
+
+The bundled `ps5-logo.svg` is based on the [PlayStation vector on SVG Repo](https://www.svgrepo.com/svg/331538/playstation), which SVG Repo lists as CC0. The project changes its fill color and dimensions. CC0 does not grant trademark rights in PlayStation or Sony marks; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Original project code and documentation are licensed under the MIT License in [LICENSE](LICENSE), except for assets and third-party material identified separately.
+>>>>>>> b0d7135 (Update PlayStation icon and asset references)
