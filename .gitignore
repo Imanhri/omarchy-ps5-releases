@@ -1,0 +1,39 @@
+# Local credentials and secrets
+credentials
+credentials.*
+*.credentials
+*.token
+*.tokens
+access-token
+access-token.*
+.env
+.env.*
+*.env
+!.env.example
+.envrc
+secrets/
+*.secret
+
+# Runtime caches and generated files
+.cache/
+cache/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+.coverage
+htmlcov/
+
+# Editor and operating-system files
+.DS_Store
+*.swp
+*.swo
+*~

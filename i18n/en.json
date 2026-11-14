@@ -1,0 +1,39 @@
+{
+  "bar.tooltip": "Upcoming PS5 releases",
+  "panel.title": "Upcoming PS5 releases",
+  "panel.tabUpcoming": "Upcoming PS5 Releases",
+  "panel.refresh": "Refresh",
+  "panel.refreshTooltip": "Check for release updates",
+  "panel.loading": "Loading upcoming releases…",
+  "panel.refreshing": "Checking for updates…",
+  "panel.error": "Couldn’t load releases. Check your connection and IGDB credentials, then try again.",
+  "panel.credentialsMissing": "IGDB credentials are missing or incomplete. Create ~/.config/ps5-releases/credentials with your IGDB_CLIENT_ID and IGDB_CLIENT_SECRET, then refresh.",
+  "panel.empty": "No upcoming PS5 releases were found.",
+  "panel.today": "Today",
+  "panel.daysRemaining": {
+    "one": "%1 day remaining",
+    "other": "%1 days remaining"
+  },
+  "panel.dateFormat": "d MMM yyyy",
+  "panel.cachedAt": "Cached %1",
+  "panel.fetchedAt": "Updated %1",
+  "panel.gameDetailsTooltip": "View game details on IGDB",
+  "monthly.tabTitle": "Top Games of the Month",
+  "monthly.previousMonth": "Previous month",
+  "monthly.nextMonth": "Next month",
+  "monthly.refreshTooltip": "Refresh this month's rankings",
+  "monthly.rankingNote": "Ranked by IGDB total rating with at least 5 ratings. Unrated games are not ranked. If a game has multiple PS5 regional dates this month, the earliest date is shown.",
+  "monthly.unrankedCount": {
+    "one": "%1 game was unrated or had fewer than 5 ratings, so it was not ranked.",
+    "other": "%1 games were unrated or had fewer than 5 ratings, so they were not ranked."
+  },
+  "monthly.loading": "Loading this month's top games…",
+  "monthly.refreshing": "Checking this month's rankings…",
+  "monthly.error": "Couldn’t load this month’s rankings. Check your connection and try again.",
+  "monthly.credentialsMissing": "IGDB credentials are missing or incomplete. Create ~/.config/ps5-releases/credentials with your IGDB_CLIENT_ID and IGDB_CLIENT_SECRET, then refresh.",
+  "monthly.empty": "No ranked PS5 games found for this month.",
+  "monthly.unrated": "Unrated · not ranked",
+  "monthly.ratingOutOf100": "%1/100",
+  "monthly.cachedAt": "Cached %1",
+  "monthly.fetchedAt": "Updated %1"
+}
