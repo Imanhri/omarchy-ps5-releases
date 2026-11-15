@@ -35,6 +35,14 @@ Panel {
   property string monthlyUpdatedAt: ""
   property string monthlyLoadedKey: ""
   property string monthlyRequestKey: ""
+  property bool detailsVisible: false
+  property var selectedGame: null
+  property var detailData: null
+  property bool detailLoading: false
+  property bool detailFailed: false
+  property bool detailCredentialsMissing: false
+  property int detailProcessGameId: 0
+  property real listScrollPosition: 0
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Commons.Color.foreground
@@ -296,11 +304,126 @@ Panel {
       ? url : ""
   }
 
-  function openGame(value, process) {
+  function openGame(value) {
     var safeUrl = root.safeGameUrl(value)
-    if (!safeUrl || !process || process.running) return
-    process.command = ["xdg-open", safeUrl]
-    process.running = true
+    if (!safeUrl || gameOpenProcess.running) return
+    gameOpenProcess.command = ["xdg-open", safeUrl]
+    gameOpenProcess.running = true
+  }
+
+  function showDetails(game) {
+    var id = Number(game && game.id)
+    if (!Number.isInteger(id) || id <= 0 || id > 2147483647) return
+    var content = popup.loadedContent
+    if (!content) return
+    root.listScrollPosition = content.listScroll.contentY
+    root.selectedGame = game
+    root.detailData = null
+    root.detailLoading = true
+    root.detailFailed = false
+    root.detailCredentialsMissing = false
+    root.detailsVisible = true
+    content.detailScroll.contentY = 0
+    root.startDetailFetch()
+  }
+
+  function backToList() {
+    root.detailsVisible = false
+    root.selectedGame = null
+    root.detailData = null
+    root.detailLoading = false
+    Qt.callLater(function() {
+      var content = popup.loadedContent
+      if (content) content.listScroll.contentY = root.listScrollPosition
+    })
+  }
+
+  function startDetailFetch() {
+    if (!root.selectedGame || detailProcess.running) return
+    root.detailProcessGameId = root.selectedGame.id
+    detailProcess.command = ["python3", root.scriptPath, "--details", String(root.detailProcessGameId)]
+    detailProcess.running = true
+  }
+
+  function handleDetailOutput(raw) {
+    if (!root.selectedGame || root.detailProcessGameId !== root.selectedGame.id) return
+    var payload
+    try {
+      payload = JSON.parse(String(raw || "").trim())
+    } catch (error) {
+      root.detailFailed = true
+      root.detailLoading = false
+      return
+    }
+    if (payload && payload.game_id !== undefined
+        && Number(payload.game_id) !== root.selectedGame.id) return
+    if (payload && payload.ok === true && payload.game
+        && Number(payload.game.id) !== root.selectedGame.id) return
+    if (!payload || payload.ok !== true || !payload.game
+        || Number(payload.game.id) !== root.selectedGame.id
+        || typeof payload.game.name !== "string" || !payload.game.name) {
+      root.detailFailed = true
+      root.detailCredentialsMissing = payload && payload.error === "credentials_missing"
+      root.detailLoading = false
+      return
+    }
+    var game = payload.game
+    root.detailData = {
+      name: game.name.substring(0, 512),
+      summary: typeof game.summary === "string" ? game.summary.substring(0, 8000) : "",
+      storyline: typeof game.storyline === "string" ? game.storyline.substring(0, 8000) : "",
+      genres: root.safeDetailNames(game.genres),
+      developers: root.safeDetailNames(game.developers),
+      publishers: root.safeDetailNames(game.publishers),
+      platforms: root.safeDetailNames(game.platforms),
+      rating: typeof game.rating === "number" && isFinite(game.rating)
+        && game.rating >= 0 && game.rating <= 100 ? game.rating : null,
+      cover_url: root.safeCoverUrl(game.cover_url),
+      cover_cache_url: root.safeCachedCoverUrl(game.cover_cache_url, game.cover_url),
+      artwork_url: root.safeArtworkUrl(game.artwork_url),
+      game_url: root.safeGameUrl(game.game_url)
+    }
+    root.detailFailed = false
+    root.detailLoading = false
+  }
+
+  function safeDetailNames(value) {
+    if (!Array.isArray(value)) return []
+    return value.slice(0, 20).filter(function(name) {
+      return typeof name === "string" && name.trim().length > 0
+    }).map(function(name) { return name.substring(0, 160) })
+  }
+
+  function safeArtworkUrl(value) {
+    var url = String(value || "")
+    return /^https:\/\/images\.igdb\.com\/igdb\/image\/upload\/t_screenshot_med\/[A-Za-z0-9_-]{1,128}\.jpg$/.test(url)
+      ? url : ""
+  }
+
+  function detailHeroSource(fallback) {
+    var game = root.detailData
+    if (!fallback && game && game.artwork_url) return game.artwork_url
+    var cover = game && game.cover_url ? game.cover_url : root.selectedGame && root.selectedGame.cover_url
+    var safeCover = root.safeCoverUrl(cover)
+    if (!fallback && safeCover) return safeCover.replace("/t_cover_small/", "/t_cover_big/")
+    var local = root.safeCachedCoverUrl(root.selectedGame && root.selectedGame.cover_cache_url,
+                                        root.selectedGame && root.selectedGame.cover_url)
+    return local || safeCover
+  }
+
+  function detailMetaRows() {
+    if (!root.selectedGame) return []
+    var game = root.detailData || ({})
+    var rows = [{ label: strings.t("details.releaseDate"), value: root.formattedDate(root.selectedGame.released) }]
+    if (game.genres && game.genres.length) rows.push({ label: strings.t("details.genres"), value: game.genres.join(", ") })
+    if (game.developers && game.developers.length) rows.push({ label: strings.t("details.developers"), value: game.developers.join(", ") })
+    if (game.publishers && game.publishers.length) rows.push({ label: strings.t("details.publishers"), value: game.publishers.join(", ") })
+    if (game.platforms && game.platforms.length) rows.push({ label: strings.t("details.platforms"), value: game.platforms.join(", ") })
+    var rating = game.rating
+    if (rating === null || rating === undefined) rating = root.selectedGame.rating
+    if (typeof rating === "number" && isFinite(rating) && rating >= 0 && rating <= 100)
+      rows.push({ label: strings.t("details.rating"), value: root.monthlyRatingLabel(rating) })
+    return rows
   }
 
   function coverSource(game, useRemoteFallback) {
@@ -363,6 +486,26 @@ Panel {
     }
   }
 
+  Process { id: gameOpenProcess }
+
+  Process {
+    id: detailProcess
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.handleDetailOutput(String(text || ""))
+    }
+    onExited: function(exitCode) {
+      Qt.callLater(function() {
+        if (!root.selectedGame) return
+        if (root.selectedGame.id !== root.detailProcessGameId) {
+          root.startDetailFetch()
+        } else if (exitCode !== 0 && root.detailLoading) {
+          root.handleDetailOutput("")
+        }
+      })
+    }
+  }
+
   Timer {
     interval: 60000
     repeat: true
@@ -382,7 +525,10 @@ Panel {
 
     content: PanelKeyCatcher {
       id: keyCatcher
-      implicitHeight: panelColumn.implicitHeight
+      property alias listScroll: panelScroll
+      property alias detailScroll: detailsScroll
+      implicitHeight: root.detailsVisible
+        ? Math.max(Style.space(340), detailsColumn.implicitHeight) : panelColumn.implicitHeight
       anchors.fill: parent
       onCloseRequested: root.close()
       onActivateRequested: root.activeTab === 0 ? root.refresh() : root.refreshMonthly(true)
@@ -396,6 +542,7 @@ Panel {
 
       Flickable {
         id: panelScroll
+        visible: !root.detailsVisible
         anchors.fill: parent
         contentWidth: width
         contentHeight: panelColumn.implicitHeight
@@ -538,16 +685,15 @@ Panel {
 
                 Rectangle {
                   id: upcomingRowSurface
-                  property string validatedUrl: root.safeGameUrl(modelData.game_url)
                   width: parent.width
                   height: 62 + Style.space(6)
                   radius: Style.space(6)
-                  color: upcomingRowHover.hovered && validatedUrl !== ""
+                  color: upcomingRowHover.hovered
                     ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.10)
                     : "transparent"
 
                   Controls.ToolTip.text: strings.t("panel.gameDetailsTooltip")
-                  Controls.ToolTip.visible: upcomingRowHover.hovered && validatedUrl !== ""
+                  Controls.ToolTip.visible: upcomingRowHover.hovered
                   Controls.ToolTip.delay: 500
 
                   Row {
@@ -649,17 +795,13 @@ Panel {
 
                   HoverHandler {
                     id: upcomingRowHover
-                    cursorShape: upcomingRowSurface.validatedUrl !== ""
-                      ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    cursorShape: Qt.PointingHandCursor
                   }
 
                   TapHandler {
                     acceptedButtons: Qt.LeftButton
-                    enabled: upcomingRowSurface.validatedUrl !== ""
-                    onTapped: root.openGame(upcomingRowSurface.validatedUrl, upcomingOpenProcess)
+                    onTapped: root.showDetails(modelData)
                   }
-
-                  Process { id: upcomingOpenProcess }
                 }
 
                 Rectangle {
@@ -825,16 +967,15 @@ Panel {
 
                 Rectangle {
                   id: monthlyRowSurface
-                  property string validatedUrl: root.safeGameUrl(modelData.game_url)
                   width: parent.width
                   height: 62 + Style.space(6)
                   radius: Style.space(6)
-                  color: monthlyRowHover.hovered && validatedUrl !== ""
+                  color: monthlyRowHover.hovered
                     ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.10)
                     : "transparent"
 
                   Controls.ToolTip.text: strings.t("panel.gameDetailsTooltip")
-                  Controls.ToolTip.visible: monthlyRowHover.hovered && validatedUrl !== ""
+                  Controls.ToolTip.visible: monthlyRowHover.hovered
                   Controls.ToolTip.delay: 500
 
                   Row {
@@ -936,17 +1077,13 @@ Panel {
 
                   HoverHandler {
                     id: monthlyRowHover
-                    cursorShape: monthlyRowSurface.validatedUrl !== ""
-                      ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    cursorShape: Qt.PointingHandCursor
                   }
 
                   TapHandler {
                     acceptedButtons: Qt.LeftButton
-                    enabled: monthlyRowSurface.validatedUrl !== ""
-                    onTapped: root.openGame(monthlyRowSurface.validatedUrl, monthlyOpenProcess)
+                    onTapped: root.showDetails(modelData)
                   }
-
-                  Process { id: monthlyOpenProcess }
                 }
 
                 Rectangle {
@@ -960,7 +1097,207 @@ Panel {
           }
         }
       }
+      }
+
+      Flickable {
+        id: detailsScroll
+        visible: root.detailsVisible
+        onVisibleChanged: if (visible) detailHeroImage.useFallback = false
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: detailsColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+
+        Column {
+          id: detailsColumn
+          width: detailsScroll.width
+          spacing: Style.space(12)
+
+          Row {
+            width: parent.width
+            spacing: Style.space(8)
+
+            Button {
+              text: strings.t("details.back")
+              iconText: Commons.I18n.rightToLeft ? "󰅂" : "󰅁"
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
+              onClicked: root.backToList()
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: strings.t("details.title")
+              color: root.contentForeground
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+              anchors.verticalCenter: parent.verticalCenter
+            }
+          }
+
+          Rectangle {
+            id: detailHero
+            width: parent.width
+            height: Style.space(200)
+            radius: Style.space(7)
+            color: Qt.darker(root.contentForeground, 2.8)
+            border.width: Math.max(1, Style.space(1))
+            border.color: Qt.darker(root.contentForeground, 1.8)
+            clip: true
+
+            Image {
+              id: detailHeroImage
+              property bool useFallback: false
+              anchors.fill: parent
+              anchors.margins: Style.space(2)
+              source: root.detailHeroSource(useFallback)
+              onStatusChanged: if (status === Image.Error && !useFallback) useFallback = true
+              sourceSize: Qt.size(569, 374)
+              asynchronous: true
+              cache: true
+              smooth: true
+              fillMode: Image.PreserveAspectFit
+              visible: status === Image.Ready
+            }
+
+            Image {
+              anchors.centerIn: parent
+              width: Style.space(52)
+              height: Style.space(52)
+              source: Qt.resolvedUrl("ps5-logo.svg")
+              sourceSize: Qt.size(104, 104)
+              fillMode: Image.PreserveAspectFit
+              asynchronous: true
+              visible: detailHeroImage.status !== Image.Ready
+            }
+          }
+
+          Text {
+            width: parent.width
+            textFormat: Text.PlainText
+            text: root.detailData ? root.detailData.name : (root.selectedGame ? root.selectedGame.name : "")
+            color: root.contentForeground
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.title
+            font.bold: true
+            wrapMode: Text.Wrap
+          }
+
+          Column {
+            width: parent.width
+            spacing: Style.space(7)
+
+            Repeater {
+              model: root.detailMetaRows()
+
+              delegate: Row {
+                required property var modelData
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  width: Style.space(96)
+                  textFormat: Text.PlainText
+                  text: modelData.label
+                  color: Qt.darker(root.contentForeground, 1.35)
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.Wrap
+                }
+
+                Text {
+                  width: parent.width - Style.space(96) - parent.spacing
+                  textFormat: Text.PlainText
+                  text: modelData.value
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.Wrap
+                }
+              }
+            }
+          }
+
+          Text {
+            visible: root.detailLoading
+            width: parent.width
+            textFormat: Text.PlainText
+            text: strings.t("details.loading")
+            color: Qt.darker(root.contentForeground, 1.35)
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.body
+            wrapMode: Text.Wrap
+          }
+
+          Column {
+            visible: root.detailFailed
+            width: parent.width
+            spacing: Style.space(8)
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: strings.t(root.detailCredentialsMissing ? "details.credentialsMissing" : "details.error")
+              color: Commons.Color.urgent
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              wrapMode: Text.Wrap
+            }
+
+            Button {
+              text: strings.t("details.retry")
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
+              onClicked: {
+                root.detailLoading = true
+                root.detailFailed = false
+                root.startDetailFetch()
+              }
+            }
+          }
+
+          Column {
+            visible: !root.detailLoading && !root.detailFailed
+            width: parent.width
+            spacing: Style.space(6)
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: strings.t("details.about")
+              color: root.contentForeground
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.body
+              font.bold: true
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: root.detailData ? (root.detailData.summary || root.detailData.storyline || strings.t("details.noDescription")) : ""
+              color: Qt.darker(root.contentForeground, 1.15)
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              wrapMode: Text.Wrap
+            }
+          }
+
+          Button {
+            readonly property string destination: root.safeGameUrl(
+              root.detailData && root.detailData.game_url ? root.detailData.game_url
+                : root.selectedGame && root.selectedGame.game_url)
+            text: strings.t("details.viewOnIgdb")
+            iconText: "󰖟"
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            enabled: destination !== ""
+            onClicked: root.openGame(destination)
+          }
+        }
+      }
     }
   }
-}
 }

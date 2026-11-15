@@ -9,8 +9,9 @@ A Quickshell bar widget for Omarchy that shows upcoming PlayStation 5 releases a
 - Previous and next month navigation and manual refresh in both tabs.
 - Strict PS5 platform verification, exact release-date precision, regional date handling, and filtering of add-ons and duplicate editions.
 - Cover art from IGDB with a bounded local cache and the plugin icon as a placeholder when art is unavailable.
-- Clickable game rows that open the exact IGDB game page in the default browser when IGDB supplies a valid URL.
-- Six-hour, file-locked data caching. Refreshing the display normally reuses cached data instead of creating a new Twitch token.
+- Clickable game rows that open Game Details inside the existing popup, with artwork, available metadata, and IGDB's official summary or storyline.
+- A Back button that restores the previous tab, selected month, and list scroll position; a View on IGDB button opens the exact game page in the default browser when IGDB supplies a valid URL.
+- Six-hour, file-locked list caching and a separate six-hour detail cache keyed by game ID. Refreshing the display normally reuses cached data instead of creating a new Twitch token.
 - Asynchronous Python requests so the shell UI remains responsive.
 
 ## Compatibility
@@ -20,6 +21,10 @@ This plugin targets the Omarchy Quattro shell plugin runtime and its Quickshell/
 The plugin runs with your user permissions inside the long-running shell. Review the source before installation; Omarchy plugins are not sandboxed.
 
 ## Screenshots
+
+The tracked [preview.png](preview.png) shows the Upcoming list. The bundled [ps5-logo.svg](ps5-logo.svg) is the bar icon and the placeholder used when artwork is unavailable; its source and license context are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+![Upcoming PS5 releases preview](preview.png)
 
 <img width="622" height="820" alt="image" src="https://github.com/user-attachments/assets/4417b5a5-0650-4c13-af06-12b26f5a0ce9" />
 
@@ -43,10 +48,10 @@ No Python package is installed by the plugin. The application uses only the stan
 
 ## Install
 
-After this repository is public at the URL below, install it with Omarchy:
+Install from this repository with Omarchy:
 
 ```sh
-omarchy plugin add https://github.com/imanhri/ps5-releases.git --enable
+omarchy plugin add https://github.com/Imanhri/omarchy-ps5-releases.git --enable
 ```
 
 Omarchy validates the manifest during installation. You can also check an existing checkout manually:
@@ -83,11 +88,17 @@ Click the PlayStation mark in the top bar to open the panel.
 - **Upcoming PS5 Releases** shows eligible games with an exact PS5 release date, days remaining, and a cover when available. The list is sorted by release date.
 - **Top Games of the Month** shows eligible PS5 releases in the selected calendar month, ranked by IGDB total rating. Games with fewer than five ratings are not included in the ranking. Use the arrows to change months.
 - Use **Refresh** to request the selected data again. The local six-hour cache is kept on disk and protected with a file lock.
-- Click a row to open its IGDB game page in your default browser. Rows with no valid IGDB URL remain visible but are not clickable.
+- Click any game row or cover to open Game Details in the same popup.
+
+## Game Details
+
+Game Details shows available IGDB artwork or cover art, the full title, genres, developers, publishers, platforms, rating, and IGDB's official summary or storyline. The PS5 release date stays the date shown in the list; it is not replaced by the game's general first release date. Long descriptions scroll within the popup. Missing fields are omitted rather than guessed, and loading or request failures have their own states.
+
+Use **Back** to return to the same tab, selected month, and list scroll position. Use **View on IGDB** to open that game's validated IGDB URL in your default browser. The button is disabled when IGDB does not provide a valid game URL.
 
 ## Cover art and cache
 
-Cover metadata comes from IGDB. Images are requested from IGDB's image CDN and cached locally under `~/.cache/ps5-releases/covers/`; the cache is bounded by image count and total size. A missing or failed image uses the bundled plugin icon as a placeholder. Game data is cached for six hours under `$XDG_CACHE_HOME/ps5-releases/`, or `~/.cache/ps5-releases/` when `XDG_CACHE_HOME` is not set. No cover images are bundled in this repository.
+Cover metadata comes from IGDB. Images are requested from IGDB's image CDN and cached locally under `~/.cache/ps5-releases/covers/`; the cover cache is bounded by image count and total size. A missing or failed image uses the bundled plugin icon as a placeholder. List data is cached for six hours under `$XDG_CACHE_HOME/ps5-releases/`, or `~/.cache/ps5-releases/` when `XDG_CACHE_HOME` is not set. Details have a separate six-hour cache in its `details/` subdirectory and are fetched only when a game is opened. No game art is bundled in this repository.
 
 ## Update
 
@@ -113,11 +124,9 @@ Removing the plugin leaves your IGDB credentials and cached files in place in ca
 - **A request fails:** check network access to Twitch and IGDB, then use Refresh. The UI displays a generic API/network error without request details.
 - **No games appear:** IGDB may not have a qualifying exact PS5 release date or platform association for that title. The plugin does not substitute a game's general first release date.
 - **Covers are blank:** IGDB may not have cover metadata, or the image request may have failed. The row remains usable and shows the placeholder.
-- **A game page does not open:** make sure `xdg-open` is available and a default browser is configured. Only safe HTTPS IGDB game-detail URLs are opened.
+- **Game Details do not load:** check network access to Twitch and IGDB, then use Retry. The list remains available through Back.
+- **View on IGDB does not open a page:** make sure `xdg-open` is available and a default browser is configured. Only validated HTTPS IGDB game-detail URLs are opened.
 - **The widget is not visible:** check `omarchy plugin list` and confirm the widget is enabled in your bar layout. Revalidate the plugin and inspect Quickshell's logs for QML errors.
-<<<<<<< HEAD
-=======
-
 ## Data and asset attribution
 
 Game names, ratings, release data, game URLs, and cover metadata are retrieved from [IGDB](https://www.igdb.com/) through its API. Cover images are served by the IGDB image CDN. See the [IGDB API documentation](https://api-docs.igdb.com/) and applicable Twitch Developer Service Agreement for usage terms. Game art and trademarks remain the property of their respective owners. This independent plugin is not affiliated with Sony, PlayStation, Twitch, or IGDB.
@@ -125,4 +134,3 @@ Game names, ratings, release data, game URLs, and cover metadata are retrieved f
 The bundled `ps5-logo.svg` is based on the [PlayStation vector on SVG Repo](https://www.svgrepo.com/svg/331538/playstation), which SVG Repo lists as CC0. The project changes its fill color and dimensions. CC0 does not grant trademark rights in PlayStation or Sony marks; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Original project code and documentation are licensed under the MIT License in [LICENSE](LICENSE), except for assets and third-party material identified separately.
->>>>>>> b0d7135 (Update PlayStation icon and asset references)

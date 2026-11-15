@@ -263,20 +263,37 @@ class ReleaseDateTests(unittest.TestCase):
         self.assertTrue(fake.release_calls)
         self.assertTrue(all("game.url" in query for query in fake.release_calls))
 
-    def test_qml_clicks_only_validated_row_urls_with_argument_array(self):
+    def test_qml_rows_open_internal_details_and_browser_uses_argument_array(self):
         panel = Path(__file__).parents[1].joinpath("Panel.qml").read_text(encoding="utf-8")
         self.assertGreaterEqual(panel.count("TapHandler {"), 2)
         self.assertGreaterEqual(panel.count("Qt.PointingHandCursor"), 2)
         self.assertGreaterEqual(panel.count('strings.t("panel.gameDetailsTooltip")'), 2)
-        self.assertGreaterEqual(panel.count("root.openGame("), 2)
-        self.assertIn('process.command = ["xdg-open", safeUrl]', panel)
+        self.assertEqual(panel.count("root.showDetails(modelData)"), 2)
+        self.assertIn('gameOpenProcess.command = ["xdg-open", safeUrl]', panel)
         self.assertIn("function safeGameUrl(value)", panel)
         self.assertIn("game_url: root.safeGameUrl(game.game_url)", panel)
-        self.assertIn('enabled: upcomingRowSurface.validatedUrl !== ""', panel)
-        self.assertIn('enabled: monthlyRowSurface.validatedUrl !== ""', panel)
-        open_game = panel[panel.index("function openGame("):panel.index("function tooltipTitle(")]
-        self.assertNotIn("root.close()", open_game)
+        self.assertIn('enabled: destination !== ""', panel)
+        self.assertIn("function backToList()", panel)
+        self.assertIn("property alias listScroll: panelScroll", panel)
+        self.assertIn("property alias detailScroll: detailsScroll", panel)
+        self.assertIn("root.listScrollPosition = content.listScroll.contentY", panel)
+        self.assertIn("content.listScroll.contentY = root.listScrollPosition", panel)
+        self.assertNotIn("root.listScrollPosition = panelScroll.contentY", panel)
+        self.assertIn('detailProcess.command = ["python3", root.scriptPath, "--details", String(root.detailProcessGameId)]', panel)
+        self.assertIn("Number(payload.game.id) !== root.selectedGame.id", panel)
         self.assertNotRegex(panel, r"xdg-open[^\n]*\+|command:\s*\".*xdg-open")
+
+    def test_details_flickable_is_visible_sibling_of_list_flickable(self):
+        panel = Path(__file__).parents[1].joinpath("Panel.qml").read_text(encoding="utf-8")
+        list_position = panel.index("id: panelScroll")
+        details_position = panel.index("id: detailsScroll")
+        def depth_at(position):
+            prefix = panel[:position]
+            return prefix.count("{") - prefix.count("}")
+        self.assertEqual(depth_at(list_position), depth_at(details_position))
+        self.assertIn("visible: !root.detailsVisible", panel)
+        self.assertIn("visible: root.detailsVisible", panel)
+        self.assertNotIn("detailHeroSource(detailHeroImage.status", panel)
 
     def test_cover_url_generation_and_missing_cover(self):
         self.assertEqual(
@@ -353,7 +370,7 @@ class ReleaseDateTests(unittest.TestCase):
         self.assertIn("upcomingCover.status !== Image.Ready", panel)
         self.assertIn("monthlyCover.status !== Image.Ready", panel)
         self.assertIn("cover_url: root.safeCoverUrl(game.cover_url)", panel)
-        self.assertEqual(panel.count('Qt.resolvedUrl("ps5-logo.svg")'), 2)
+        self.assertEqual(panel.count('Qt.resolvedUrl("ps5-logo.svg")'), 3)
         self.assertTrue(project.joinpath("ps5-logo.svg").is_file())
 
     def test_europe_release_suppresses_later_other_region_record(self):

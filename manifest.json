@@ -3,10 +3,10 @@
   "schemaVersion": 1,
   "id": "io.github.imanhri.ps5-releases",
   "name": "PS5 Game Releases",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "imanhri",
   "license": "MIT",
-  "description": "Upcoming PS5 releases and monthly top-rated games",
+  "description": "Upcoming PS5 releases, monthly top-rated games, and in-plugin game details",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"

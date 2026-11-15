@@ -29,11 +29,15 @@ CONFIG = Path.home() / ".config/ps5-releases/credentials"
 CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
 CACHE_DIR = CACHE_ROOT / "ps5-releases"
 CACHE_FILE = CACHE_DIR / "releases.json"
+DETAIL_CACHE_DIR = CACHE_DIR / "details"
 LOCK_FILE = CACHE_DIR / "refresh.lock"
 COVER_CACHE_DIR = Path.home() / ".cache/ps5-releases/covers"
 CACHE_VERSION = 6
 CACHE_TTL_SECONDS = 6 * 60 * 60
 MAX_RESPONSE_BYTES = 1_000_000
+MAX_DETAIL_CACHE_BYTES = 64_000
+MAX_DETAIL_TEXT_LENGTH = 8_000
+MAX_DETAIL_ITEMS = 20
 MAX_GAMES = 10
 MAX_API_LIMIT = 500
 PS5_PLATFORM_ID = 167
@@ -43,6 +47,7 @@ MAX_GAME_HISTORY_RECORDS = 50_000
 GAME_ID_BATCH_SIZE = 80
 MIN_MONTH_RATING_COUNT = 5
 MAX_NAME_LENGTH = 160
+MAX_DETAIL_NAME_LENGTH = 512
 MAX_COVER_IMAGE_BYTES = 512_000
 MAX_COVER_CACHE_BYTES = 32 * 1024 * 1024
 MAX_CACHED_COVERS = 300
@@ -53,6 +58,7 @@ MONTH_KEY_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
 COVER_IMAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 GAME_DETAIL_PATH_PATTERN = re.compile(r"^/games/[a-z0-9][a-z0-9-]{0,199}/?$", re.IGNORECASE)
 GAME_URL_HOSTS = {"igdb.com", "www.igdb.com"}
+GAME_ID_PATTERN = re.compile(r"^[1-9][0-9]{0,9}$")
 JPEG_SIGNATURE = b"\xff\xd8\xff"
 BERLIN_TZ = ZoneInfo("Europe/Berlin")
 AVAILABLE_RELEASE_STATUSES = {"full release", "early access", "advanced access"}
@@ -180,6 +186,154 @@ def _safe_name(value):
         return ""
     name = "".join(character for character in value.strip() if character.isprintable())
     return name[:MAX_NAME_LENGTH].strip()
+
+
+def _safe_detail_text(value):
+    if not isinstance(value, str):
+        return ""
+    return "".join(character for character in value.strip() if character.isprintable() or character in "\n\t")[:MAX_DETAIL_TEXT_LENGTH].strip()
+
+
+def _safe_detail_name(value):
+    if not isinstance(value, str):
+        return ""
+    return "".join(character for character in value.strip() if character.isprintable())[:MAX_DETAIL_NAME_LENGTH].strip()
+
+
+def _game_id(value):
+    if not isinstance(value, str) or not GAME_ID_PATTERN.fullmatch(value):
+        raise FetchError
+    number = int(value)
+    if number > 2_147_483_647:
+        raise FetchError
+    return number
+
+
+def _detail_names(value):
+    if not isinstance(value, list):
+        return []
+    names = []
+    for item in value[:MAX_DETAIL_ITEMS]:
+        name = _safe_name(item.get("name")) if isinstance(item, dict) else ""
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _normalise_details(row, expected_id):
+    if (not isinstance(row, dict) or isinstance(row.get("id"), bool)
+            or row.get("id") != expected_id or not _safe_detail_name(row.get("name"))):
+        raise FetchError
+    developers, publishers = [], []
+    involved = row.get("involved_companies")
+    if isinstance(involved, list):
+        for item in involved[:MAX_DETAIL_ITEMS]:
+            if not isinstance(item, dict):
+                continue
+            company = item.get("company")
+            name = _safe_name(company.get("name")) if isinstance(company, dict) else ""
+            if not name:
+                continue
+            if item.get("developer") is True and name not in developers:
+                developers.append(name)
+            if item.get("publisher") is True and name not in publishers:
+                publishers.append(name)
+    artworks = row.get("artworks")
+    artwork_id = ""
+    if isinstance(artworks, list):
+        for item in artworks[:MAX_DETAIL_ITEMS]:
+            artwork_id = _cover_image_id(item)
+            if artwork_id:
+                break
+    cover_id = _cover_image_id(row.get("cover"))
+    rating = _finite_number(row.get("total_rating"))
+    if rating is None or rating < 0 or rating > 100:
+        rating = None
+    return {
+        "id": expected_id,
+        "name": _safe_detail_name(row.get("name")),
+        "summary": _safe_detail_text(row.get("summary")),
+        "storyline": _safe_detail_text(row.get("storyline")),
+        "genres": _detail_names(row.get("genres")),
+        "developers": developers,
+        "publishers": publishers,
+        "platforms": _detail_names(row.get("platforms")),
+        "rating": rating,
+        "cover_url": _cover_url(cover_id),
+        "artwork_url": (f"https://images.igdb.com/igdb/image/upload/t_screenshot_med/{artwork_id}.jpg"
+                        if artwork_id else ""),
+        "game_url": _validated_game_url(row.get("url")),
+    }
+
+
+def _detail_cache_path(game_id):
+    return DETAIL_CACHE_DIR / f"{game_id}.json"
+
+
+def _read_detail_cache(game_id, now):
+    path = _detail_cache_path(game_id)
+    try:
+        if path.is_symlink() or path.stat().st_size > MAX_DETAIL_CACHE_BYTES:
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        return None
+    updated_at = _parse_timestamp(payload.get("updated_at"))
+    if updated_at is None or not 0 <= (now - updated_at).total_seconds() < CACHE_TTL_SECONDS:
+        return None
+    try:
+        return _normalise_details(payload.get("game"), game_id)
+    except FetchError:
+        return None
+
+
+def _write_detail_cache(game_id, game, updated_at):
+    path = _detail_cache_path(game_id)
+    temporary_path = None
+    try:
+        payload = json.dumps({"version": 1, "updated_at": updated_at, "game": game},
+                             ensure_ascii=False, separators=(",", ":"))
+        if len(payload.encode("utf-8")) > MAX_DETAIL_CACHE_BYTES:
+            return
+        DETAIL_CACHE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor, temporary_path = tempfile.mkstemp(prefix=".details-", dir=DETAIL_CACHE_DIR)
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        os.replace(temporary_path, path)
+        temporary_path = None
+    except OSError:
+        pass
+    finally:
+        if temporary_path:
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
+
+
+def get_game_details(game_id, now=None):
+    now = now or datetime.now(timezone.utc)
+    cached = _read_detail_cache(game_id, now)
+    if cached is not None:
+        cached["cover_cache_url"] = _cached_cover_uri(cached["cover_url"])
+        return {"ok": True, "game": cached, "cached": True}
+    client_id, client_secret = load_credentials()
+    headers = {"Client-ID": client_id, "Authorization": f"Bearer {get_token(client_id, client_secret)}"}
+    query = ("fields id,name,summary,storyline,genres.name,involved_companies.company.name,"
+             "involved_companies.developer,involved_companies.publisher,platforms.name,"
+             "cover.image_id,artworks.image_id,total_rating,url; "
+             f"where id = {game_id}; limit 1;")
+    rows = igdb_request("games", query, headers)
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise FetchError
+    game = _normalise_details(rows[0], game_id)
+    updated_at = now.isoformat().replace("+00:00", "Z")
+    _write_detail_cache(game_id, rows[0], updated_at)
+    game["cover_cache_url"] = _cached_cover_uri(game["cover_url"])
+    return {"ok": True, "game": game, "cached": False}
 
 
 def _cover_image_id(value):
@@ -1398,9 +1552,12 @@ def get_cached_or_fetch_month(year, month, force=False, now=None,
 
 
 def main(argv=None):
+    requested_detail_id = None
     try:
         parser = argparse.ArgumentParser(description="Fetch PS5 release data from IGDB.")
-        parser.add_argument("--top-month", metavar="YYYY-MM")
+        modes = parser.add_mutually_exclusive_group()
+        modes.add_argument("--top-month", metavar="YYYY-MM")
+        modes.add_argument("--details", metavar="GAME_ID")
         parser.add_argument("--force", action="store_true", help="refresh a monthly result, bypassing its cache")
         parser.add_argument(
             "--debug-platforms",
@@ -1414,7 +1571,12 @@ def main(argv=None):
         )
         args = parser.parse_args(argv)
 
-        if args.top_month is None:
+        if args.details is not None:
+            if args.force or args.debug_platforms or args.debug_content:
+                raise FetchError
+            requested_detail_id = _game_id(args.details)
+            result = get_game_details(requested_detail_id)
+        elif args.top_month is None:
             if args.force:
                 raise FetchError
             result = get_cached_or_fetch(
@@ -1437,10 +1599,14 @@ def main(argv=None):
         exit_code = 0
     except CredentialsError:
         result = {"ok": False, "error": "credentials_missing"}
+        if requested_detail_id is not None:
+            result["game_id"] = requested_detail_id
         exit_code = 1
     except Exception:
         # Never echo exception/request details: they can contain sensitive data.
         result = {"ok": False}
+        if requested_detail_id is not None:
+            result["game_id"] = requested_detail_id
         exit_code = 1
     print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
     return exit_code
